@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Apple Music Downloader</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+</head>
+<body class="bg-dark text-light">
+
+<div class="container-fluid p-3">
+    <!-- Title Section -->
+    <div class="text-center mb-4">
+        <h1 class="display-4 text-primary mb-2">
+            🎵 Apple Music Downloader Web UI
+        </h1>
+        <p class="lead text-muted mb-3">
+            A simple web interface for downloading your favorite Apple Music tracks
+        </p>
+        <div class="mb-3">
+            <a href="https://github.com/HARAJIT05/apple-music-rip" target="_blank" class="btn btn-outline-warning btn-sm">
+                ⭐ Star this project on GitHub
+            </a>
+        </div>
+    </div>
+
+    <!-- Top bar -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <button class="btn btn-outline-light" onclick="window.location.href='/settings'">⚙ Settings</button>
+        </div>
+        <div>
+            <span id="wrapper-indicator"
+                  class="badge {{ 'bg-success' if wrapper_running else 'bg-danger' }}">
+                Wrapper: {{ 'Running' if wrapper_running else 'Stopped' }}
+            </span>
+        </div>
+    </div>
+
+    <!-- Login Section -->
+    <div class="text-center mb-3">
+        <button id="login-btn" class="btn btn-secondary">Login to Wrapper</button>
+        <button id="stop-wrapper-btn" class="btn btn-danger ms-2 d-none">Stop Wrapper</button>
+        <button id="auto-login-btn" class="btn btn-info ms-2 d-none">🤖 Auto Login</button>
+        <button id="forget-credentials-btn" class="btn btn-warning ms-2 d-none">🗑️ Forget Credentials</button>
+        
+        <div id="saved-credentials-info" class="mt-2 d-none">
+            <small class="text-success">💾 Saved credentials for: <span id="saved-email-display"></span></small>
+        </div>
+        
+        <div id="login-form" class="mt-3 d-none">
+            <input type="email" id="email" placeholder="Email" class="form-control mb-2 w-25 mx-auto">
+            <input type="password" id="password" placeholder="Password" class="form-control mb-2 w-25 mx-auto">
+            <button id="submit-login" class="btn btn-success">Login</button>
+        </div>
+    </div>
+
+    <!-- 2FA Modal -->
+    <div id="twofa-modal" class="modal-overlay d-none">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">🔐 Two-Factor Authentication Required</h5>
+            </div>
+            <div class="modal-body">
+                <p class="text-center mb-3">Please enter your 2FA code to continue:</p>
+                <input type="text" id="twofa-code" placeholder="Enter 2FA Code" class="form-control form-control-lg text-center mb-3" maxlength="6" autocomplete="off" pattern="[0-9]*" inputmode="numeric">
+                <div class="d-flex justify-content-center gap-2">
+                    <button id="submit-2fa" class="btn btn-success">Submit</button>
+                    <button id="cancel-2fa" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Middle input area -->
+    <div class="text-center mb-4">
+        <input id="link-box" type="text" class="form-control form-control-lg mb-3 w-50 mx-auto"
+               placeholder="Paste Apple Music link here">
+
+        <div class="d-flex justify-content-center mb-3">
+            <div id="format-options" class="border rounded p-3" style="background-color: #333; border-color: #555; max-width: 500px;">
+                <h6 class="mb-2">Audio Quality</h6>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="format" id="lossless" value="lossless" checked>
+                    <label class="form-check-label" for="lossless">Lossless (ALAC)</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="format" id="hires" value="hires">
+                    <label class="form-check-label" for="hires">Hi-Res Lossless</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="format" id="atmos" value="atmos">
+                    <label class="form-check-label" for="atmos">Dolby Atmos</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="format" id="aac" value="aac">
+                    <label class="form-check-label" for="aac">High-Quality (AAC)</label>
+                </div>
+                <div class="mt-2 text-warning small" id="atmos-warning" style="display:none;">
+                    ⚠️ Note: Atmos Audio might not be available for all tracks.
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-3">
+            <button id="download-btn" class="btn btn-primary btn-lg" disabled>Download</button>
+        </div>
+    </div>
+
+    <!-- Download Folders Info -->
+    <div class="row mb-4" id="download-folders-info" style="display: none;">
+        <div class="col-12">
+            <div class="alert alert-info">
+                <h6 class="mb-2">📁 Download Locations:</h6>
+                <div class="row">
+                    <div class="col-md-4">
+                        <small><strong>ALAC:</strong> <span id="alac-folder"></span></small>
+                    </div>
+                    <div class="col-md-4">
+                        <small><strong>ATMOS:</strong> <span id="atmos-folder"></span></small>
+                    </div>
+                    <div class="col-md-4">
+                        <small><strong>AAC:</strong> <span id="aac-folder"></span></small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom logs -->
+    <div class="row">
+        <div class="col-md-6">
+            <h5>Downloader Logs</h5>
+            <div class="log-box" id="downloader-logs"></div>
+        </div>
+        <div class="col-md-6">
+            <h5>Wrapper Logs</h5>
+            <div class="log-box" id="wrapper-logs"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Check for saved credentials on page load
+function checkSavedCredentials() {
+    axios.get('/check_saved_credentials')
+        .then(res => {
+            if (res.data.has_credentials) {
+                document.getElementById('saved-credentials-info').classList.remove('d-none');
+                document.getElementById('saved-email-display').textContent = res.data.email;
+                document.getElementById('auto-login-btn').classList.remove('d-none');
+                document.getElementById('forget-credentials-btn').classList.remove('d-none');
+            }
+        });
+}
+
+// Auto-login functionality
+document.getElementById('auto-login-btn').addEventListener('click', () => {
+    const wrapperLogs = document.getElementById('wrapper-logs');
+    wrapperLogs.innerHTML += `<div>> 🤖 Starting auto-login...</div>`;
+    wrapperLogs.scrollTop = wrapperLogs.scrollHeight;
+    
+    axios.post('/auto_login')
+        .then(res => {
+            if (res.data.status === 'ok') {
+                wrapperLogs.innerHTML += `<div>> ${res.data.msg}</div>`;
+            } else {
+                wrapperLogs.innerHTML += `<div>> ❌ ${res.data.msg}</div>`;
+            }
+            wrapperLogs.scrollTop = wrapperLogs.scrollHeight;
+        });
+});
+
+// Forget credentials functionality
+document.getElementById('forget-credentials-btn').addEventListener('click', () => {
+    if (confirm('Are you sure you want to delete saved credentials?')) {
+        axios.post('/delete_saved_credentials')
+            .then(res => {
+                if (res.data.status === 'ok') {
+                    document.getElementById('saved-credentials-info').classList.add('d-none');
+                    document.getElementById('auto-login-btn').classList.add('d-none');
+                    document.getElementById('forget-credentials-btn').classList.add('d-none');
+                    
+                    const wrapperLogs = document.getElementById('wrapper-logs');
+                    wrapperLogs.innerHTML += `<div>> 🗑️ Saved credentials deleted</div>`;
+                    wrapperLogs.scrollTop = wrapperLogs.scrollHeight;
+                }
+            });
+    }
+});
+
+document.getElementById("login-btn").addEventListener("click", () => {
+    document.getElementById("login-form").classList.toggle("d-none");
+});
+
+document.getElementById("submit-login").addEventListener("click", () => {
+    const email = document.getElementById("email").value;
+    const password = document.getElementById("password").value;
+    
+    // Add immediate feedback
+    const wrapperLogs = document.getElementById("wrapper-logs");
+    wrapperLogs.innerHTML += `<div>> Attempting to login with ${email}...</div>`;
+    wrapperLogs.scrollTop = wrapperLogs.scrollHeight;
+
+    axios.post("/login_wrapper", new URLSearchParams({email, password}))
+        .then(res => {
+            if (res.data.status === "ok") {
+                // Don't immediately set as running - wait for the success message in logs
+                wrapperLogs.innerHTML += `<div>> ${res.data.msg}</div>`;
+            } else {
+                wrapperLogs.innerHTML += `<div>> ERROR: ${res.data.msg}</div>`;
+            }
+            wrapperLogs.scrollTop = wrapperLogs.scrollHeight;
+        })
+        .catch(err => {
+            wrapperLogs.innerHTML += `<div>> ERROR: Failed to connect to server</div>`;
+            wrapperLogs.scrollTop = wrapperLogs.scrollHeight;
+        });
+});
+
+document.getElementById("download-btn").addEventListener("click", () => {
+    const link = document.getElementById("link-box").value;
+    const format = document.querySelector("input[name='format']:checked")?.value || "lossless";
+    
+    if (!link.trim()) {
+        const logs = document.getElementById("downloader-logs");
+        logs.innerHTML += `<div style="color: #dc3545;"> ❌ Please enter a valid Apple Music URL</div>`;
+        logs.scrollTop = logs.scrollHeight;
+        return;
+    }
+
+    const formData = new URLSearchParams({
+        link: link,
+        format: format
+    });
+
+    axios.post("/download", formData)
+        .then(res => {
+            const logs = document.getElementById("downloader-logs");
+            if (res.data.status === "ok") {
+                logs.innerHTML += `<div style="color: #28a745;"> ✅ ${res.data.msg}</div>`;
+                // Disable download button while download is running
+                document.getElementById("download-btn").disabled = true;
+                document.getElementById("download-btn").textContent = "Downloading...";
+            } else {
+                logs.innerHTML += `<div style="color: #dc3545;"> ❌ ${res.data.msg}</div>`;
+            }
+            logs.scrollTop = logs.scrollHeight;
+        })
+        .catch(err => {
+            const logs = document.getElementById("downloader-logs");
+            logs.innerHTML += `<div style="color: #dc3545;"> ❌ Failed to start download</div>`;
+            logs.scrollTop = logs.scrollHeight;
+        });
+});
+
+document.getElementById("stop-wrapper-btn").addEventListener("click", () => {
+    axios.post("/stop_wrapper")
+        .then(res => {
+            const wrapperLogs = document.getElementById("wrapper-logs");
+            wrapperLogs.innerHTML += `<div>> ${res.data.msg}</div>`;
+            wrapperLogs.scrollTop = wrapperLogs.scrollHeight;
+            
+            if (res.data.status === "ok") {
+                updateWrapperStatus(false);
+            }
+        });
+});
+
+function updateWrapperStatus(running) {
+    const indicator = document.getElementById("wrapper-indicator");
+    const downloadBtn = document.getElementById("download-btn");
+    const stopBtn = document.getElementById("stop-wrapper-btn");
+    
+    if (running) {
+        indicator.className = "badge bg-success";
+        indicator.innerText = "Wrapper: Running";
+        downloadBtn.disabled = false;
+        stopBtn.classList.remove("d-none");
+    } else {
+        indicator.className = "badge bg-danger";
+        indicator.innerText = "Wrapper: Stopped";
+        downloadBtn.disabled = true;
+        stopBtn.classList.add("d-none");
+    }
+}
+
+function updateLogs() {
+    axios.get("/get_logs").then(res => {
+        const wrapperBox = document.getElementById("wrapper-logs");
+        const downloaderBox = document.getElementById("downloader-logs");
+        const downloadBtn = document.getElementById("download-btn");
+
+        // Only update if there are actually logs to show
+        if (res.data.wrapper.length > 0) {
+            // Color-code success and error messages
+            wrapperBox.innerHTML = res.data.wrapper.map(l => {
+                if (l.includes("✅") || l.includes("Ready for downloads")) {
+                    return `<div style="color: #28a745;">> ${l}</div>`;
+                } else if (l.includes("❌") || l.includes("Login failed") || l.includes("ERROR")) {
+                    return `<div style="color: #dc3545;">> ${l}</div>`;
+                } else if (l.includes("[.] response type 6")) {
+                    return `<div style="color: #28a745; font-weight: bold;">> ${l}</div>`;
+                } else {
+                    return `<div>> ${l}</div>`;
+                }
+            }).join("");
+            wrapperBox.scrollTop = wrapperBox.scrollHeight;
+        }
+        
+        if (res.data.downloader.length > 0) {
+            // Color-code download messages
+            downloaderBox.innerHTML = res.data.downloader.map(l => {
+                if (l.includes("✅") || l.includes("completed successfully")) {
+                    return `<div style="color: #28a745;">> ${l}</div>`;
+                } else if (l.includes("❌") || l.includes("failed") || l.includes("Error")) {
+                    return `<div style="color: #dc3545;">> ${l}</div>`;
+                } else if (l.includes("🎵") || l.includes("Starting")) {
+                    return `<div style="color: #17a2b8;">> ${l}</div>`;
+                } else {
+                    return `<div>> ${l}</div>`;
+                }
+            }).join("");
+            downloaderBox.scrollTop = downloaderBox.scrollHeight;
+        }
+        
+        // Update download button state based on download status
+        if (res.data.download_running) {
+            downloadBtn.disabled = true;
+            downloadBtn.textContent = "Downloading...";
+        } else {
+            if (res.data.wrapper_running) {
+                downloadBtn.disabled = false;
+                downloadBtn.textContent = "Download";
+            }
+        }
+        
+        // Update wrapper status based on server response
+        updateWrapperStatus(res.data.wrapper_running);
+        
+        // Check for 2FA requirement
+        if (res.data.wrapper_needs_2fa) {
+            const modal = document.getElementById('twofa-modal');
+            if (modal.classList.contains('d-none')) {
+                show2FAModal();
+            }
+        } else {
+            // Hide 2FA modal if no longer needed
+            const modal = document.getElementById('twofa-modal');
+            if (!modal.classList.contains('d-none')) {
+                hide2FAModal();
+            }
+        }
+        
+    }).catch(err => {
+        console.log("Error fetching logs:", err);
+    });
+}
+
+// Start polling immediately and then every 1 second for better responsiveness
+updateLogs();
+setInterval(updateLogs, 1000);
+
+// Check for saved credentials when page loads
+checkSavedCredentials();
+
+// Load download folders
+function loadDownloadFolders() {
+    axios.get('/get_download_folders')
+        .then(res => {
+            if (res.data.status === 'ok') {
+                document.getElementById('alac-folder').textContent = res.data.folders.alac;
+                document.getElementById('atmos-folder').textContent = res.data.folders.atmos;
+                document.getElementById('aac-folder').textContent = res.data.folders.aac;
+                document.getElementById('download-folders-info').style.display = 'block';
+            }
+        })
+        .catch(err => {
+            console.log('Error loading download folders:', err);
+        });
+}
+
+// Load download folders on page load
+loadDownloadFolders();
+
+// Handle Format Selection Change
+document.querySelectorAll('input[name="format"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+        const warning = document.getElementById('atmos-warning');
+        if (this.value === 'atmos') {
+            warning.style.display = 'block';
+        } else {
+            warning.style.display = 'none';
+        }
+    });
+});
+
+// 2FA Modal Functionality
+function show2FAModal() {
+    const modal = document.getElementById('twofa-modal');
+    const codeInput = document.getElementById('twofa-code');
+    modal.classList.remove('d-none');
+    setTimeout(() => codeInput.focus(), 100);
+}
+
+function hide2FAModal() {
+    const modal = document.getElementById('twofa-modal');
+    const codeInput = document.getElementById('twofa-code');
+    modal.classList.add('d-none');
+    codeInput.value = '';
+}
+
+// Submit 2FA Code
+document.getElementById('submit-2fa').addEventListener('click', function() {
+    const code = document.getElementById('twofa-code').value.trim();
+    
+    if (!code) {
+        alert('Please enter your 2FA code');
+        return;
+    }
+    
+    const wrapperLogs = document.getElementById('wrapper-logs');
+    wrapperLogs.innerHTML += `<div style="color: #17a2b8;">> 🔐 Submitting 2FA code...</div>`;
+    wrapperLogs.scrollTop = wrapperLogs.scrollHeight;
+    
+    axios.post('/submit_2fa', new URLSearchParams({twofa_code: code}))
+        .then(res => {
+            if (res.data.status === 'ok') {
+                wrapperLogs.innerHTML += `<div style="color: #28a745;">> ✅ ${res.data.msg}</div>`;
+                hide2FAModal();
+            } else {
+                wrapperLogs.innerHTML += `<div style="color: #dc3545;">> ❌ ${res.data.msg}</div>`;
+            }
+            wrapperLogs.scrollTop = wrapperLogs.scrollHeight;
+        })
+        .catch(err => {
+            wrapperLogs.innerHTML += `<div style="color: #dc3545;">> ❌ Failed to submit 2FA code</div>`;
+            wrapperLogs.scrollTop = wrapperLogs.scrollHeight;
+        });
+});
+
+// Cancel 2FA
+document.getElementById('cancel-2fa').addEventListener('click', function() {
+    hide2FAModal();
+    const wrapperLogs = document.getElementById('wrapper-logs');
+    wrapperLogs.innerHTML += `<div style="color: #ffc107;">> ⚠️ 2FA cancelled by user</div>`;
+    wrapperLogs.scrollTop = wrapperLogs.scrollHeight;
+});
+
+// Allow Enter key to submit 2FA and validate input
+document.getElementById('twofa-code').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        document.getElementById('submit-2fa').click();
+    }
+    // Only allow numeric input
+    if (!/[0-9]/.test(e.key) && !['Enter', 'Backspace', 'Delete', 'Tab', 'Escape', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        e.preventDefault();
+    }
+});
+
+// Format 2FA input as user types
+document.getElementById('twofa-code').addEventListener('input', function(e) {
+    // Remove any non-numeric characters
+    this.value = this.value.replace(/[^0-9]/g, '');
+});
+
+// Close modal when clicking outside
+document.getElementById('twofa-modal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        document.getElementById('cancel-2fa').click();
+    }
+});
+</script>
+</body>
+</html>

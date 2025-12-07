@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+
+# Dependencies and Build Artifacts
+deps/
+wrapper/
+wrapper_temp/
+temp_wrapper_check/
+apple-music-downloader/
+amd_check/
+
+# Runtime/Temp
+.credentials
+assets.html
+release.html
+*.log
+*.sqlite3
+
+# System
+.DS_Store
+Thumbs.db
+GEMINI.md
