@@ -99,6 +99,10 @@ def ensure_nix_environment():
     
     try:
         print(f"Running: {' '.join(cmd)}")
+        # Allow evaluating packages marked as insecure in this (pinned) nixpkgs
+        # (Some packages in older pinned channels are flagged insecure; set
+        # this env var to permit them. The user can revert if desired.)
+        os.environ["NIXPKGS_ALLOW_INSECURE"] = "1"
         os.execv(nix_shell_cmd, cmd)
     except OSError as e:
         print(f"❌ Failed to execute nix-shell: {e}")
